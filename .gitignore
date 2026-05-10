@@ -1,3 +1,4 @@
 .DS_Store
 deep-research-report.md
 音视频方向转型规划.md
+labs/01-ffmpeg-cli/samples/*.mp4
