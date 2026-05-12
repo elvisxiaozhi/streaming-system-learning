@@ -76,3 +76,34 @@ Day 2 必掌握字段：
 | `sample_rate` | 音频采样率，例如 `48000` Hz | 音频 `STREAM` |
 | `channels` | 声道数 | 音频 `STREAM` |
 | `channel_layout` | 声道布局，例如 `mono`、`stereo` | 音频 `STREAM` |
+
+## Day 3：容器与编码格式
+
+把 Day 2 的 MP4 样例重新封装成 FLV 和 TS：
+
+```bash
+ffmpeg -y \
+  -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -c copy \
+  labs/01-ffmpeg-cli/samples/day3_remux.flv
+
+ffmpeg -y \
+  -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -c copy \
+  labs/01-ffmpeg-cli/samples/day3_remux.ts
+```
+
+关键对比：
+
+| 文件 | 容器格式 | 视频编码 | 音频编码 |
+|---|---|---|---|
+| `day2_testsrc_30s.mp4` | `mov,mp4,m4a,3gp,3g2,mj2` | H.264 High | AAC LC |
+| `day3_remux.flv` | `flv` | H.264 High | AAC LC |
+| `day3_remux.ts` | `mpegts` | H.264 High | AAC LC |
+
+观察结论：
+
+- 三个文件的容器格式不同，但视频编码和音频编码保持一致。
+- `-c copy` 做的是重新封装，不重新编码。
+- 容器变化后，`Duration`、`start`、`bitrate` 可能出现轻微变化，例如 FLV/TS 的起始时间和总码率与 MP4 不完全相同；这是容器组织方式、时间戳表示和封装开销不同造成的正常现象。
+- `-c copy` 并不是对任何输出格式都一定成立，目标容器必须支持原有编码流。
