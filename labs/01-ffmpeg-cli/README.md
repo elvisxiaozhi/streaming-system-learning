@@ -138,3 +138,34 @@ ffmpeg -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
 - `.aac` 裸流：时长被估算为 31.43s（实际 30s），带警告 "Estimating duration from bitrate"——ADTS 格式无全局索引。
 - MP4：所有字段精确，因为 moov 盒子存储了完整索引和元数据。
 - 409 + 479 ≈ 888 KB，MP4 912 KB，差值 ~24 KB 是容器开销（moov 盒子）。
+
+## Day 5：分辨率与码率转码
+
+第一次真正的转码（重新编码，不是 `-c copy`）：
+
+```bash
+# 降分辨率：1280x720 → 640x360
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -vf scale=640:360 -c:a copy \
+  labs/01-ffmpeg-cli/samples/day5_360p.mp4
+
+# 指定视频码率目标 200kb/s
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -b:v 200k -c:a copy \
+  labs/01-ffmpeg-cli/samples/day5_200kbps.mp4
+```
+
+数据对比：
+
+| 文件 | 分辨率 | 视频码率 | 文件大小 |
+|---|---|---|---|
+| `day2_testsrc_30s.mp4`（原始） | 1280x720 | 111 kb/s | 912 KB |
+| `day5_360p.mp4` | 640x360 | 55 kb/s | 706 KB |
+| `day5_200kbps.mp4` | 1280x720 | 163 kb/s | 1.1 MB |
+
+关键结论：
+
+- `-vf scale` 触发重新编码，`-c copy` 不触发。
+- 分辨率降低导致文件变小（像素减少 → bit 需求减少）。
+- 指定 `-b:v 200k`（高于原始 111k）反而使文件变大：原始用 CRF 质量优先，强制更高码率只是浪费 bit，不提升画质。
+- CRF 比固定码率更适合"在合理质量下压到最小文件"的场景。

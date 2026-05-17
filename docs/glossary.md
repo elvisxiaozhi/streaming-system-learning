@@ -39,3 +39,13 @@
 - ADTS（Audio Data Transport Stream）：AAC 音频裸流的封装格式，每帧前加 7 字节 header（含采样率、声道数、帧长度），无需容器即可自同步播放，代价是无全局时长索引。
 - moov 盒子（moov atom）：MP4 容器的核心结构，存储所有流的时间戳索引、元数据、编码参数（extradata）等；moov 决定了 MP4 能精确 seek 的能力，也是容器相比裸流的主要开销来源。
 - extradata：容器为解码器保存的初始化参数，例如 MP4 里 H.264 的 SPS/PPS 就存在 extradata 里（AVCC 格式）；裸流用 Annex B 时 SPS/PPS 直接内嵌在码流开头。
+
+## Day 5
+
+- GOP（Group of Pictures）：两个关键帧之间的帧序列，结构为 I 帧打头、后跟若干 P/B 帧。GOP 越小，seek 越快、延迟越低，但文件稍大；直播和 RTC 通常用 1-2 秒的短 GOP。
+- I 帧（Intra frame）：完整编码的帧，不依赖其他帧，是解码入口；也叫关键帧（keyframe）。
+- P 帧（Predicted frame）：只记录与前一帧的差异，比 I 帧小很多。
+- B 帧（Bi-directional frame）：参考前后两帧预测，压缩率最高，但解码复杂度更高；直播常减少或禁用 B 帧。
+- CRF（Constant Rate Factor）：质量优先的编码模式，编码器自动分配码率以维持目标质量，比固定码率更高效；libx264 默认 CRF 23。
+- `-b:v`：FFmpeg 中指定视频目标码率，会触发 ABR（平均码率）模式；若目标高于内容实际需要，文件反而变大。
+- `-vf scale`：FFmpeg 视频滤镜，用于改变分辨率；使用后会触发重新编码，不能再搭配 `-c:v copy`。
