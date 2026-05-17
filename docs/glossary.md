@@ -30,3 +30,12 @@
 - TS / MPEG-TS：一种传输流容器格式，适合流式传输和切片分发场景。
 - 重新封装 / remux：不改变音视频编码内容，只把已有媒体流换一种容器组织方式。
 - `-c copy`：FFmpeg 中表示直接复制已有编码流，不重新编码；能否成功取决于目标容器是否支持这些流。
+
+## Day 4
+
+- 裸流（bare stream / elementary stream）：没有容器封装的原始编码数据，例如纯 H.264 NALU 序列或纯 AAC 帧序列。裸流没有时间戳索引，`ffprobe` 无法给出精确时长。
+- Annex B：H.264 裸流最常见的封装方式，每个 NALU 前加 `00 00 01` 或 `00 00 00 01` 的 start code 作为分隔符，用于文件存储和流式传输。
+- AVCC（AVC Configuration）：H.264 在 MP4 容器内的封装方式，每个 NALU 前用 4 字节长度前缀代替 start code；SPS/PPS 存储在容器 extradata 里而非每个 NALU 前。
+- ADTS（Audio Data Transport Stream）：AAC 音频裸流的封装格式，每帧前加 7 字节 header（含采样率、声道数、帧长度），无需容器即可自同步播放，代价是无全局时长索引。
+- moov 盒子（moov atom）：MP4 容器的核心结构，存储所有流的时间戳索引、元数据、编码参数（extradata）等；moov 决定了 MP4 能精确 seek 的能力，也是容器相比裸流的主要开销来源。
+- extradata：容器为解码器保存的初始化参数，例如 MP4 里 H.264 的 SPS/PPS 就存在 extradata 里（AVCC 格式）；裸流用 Annex B 时 SPS/PPS 直接内嵌在码流开头。

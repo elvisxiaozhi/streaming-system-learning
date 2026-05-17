@@ -107,3 +107,34 @@ ffmpeg -y \
 - `-c copy` 做的是重新封装，不重新编码。
 - 容器变化后，`Duration`、`start`、`bitrate` 可能出现轻微变化，例如 FLV/TS 的起始时间和总码率与 MP4 不完全相同；这是容器组织方式、时间戳表示和封装开销不同造成的正常现象。
 - `-c copy` 并不是对任何输出格式都一定成立，目标容器必须支持原有编码流。
+
+## Day 4：抽取裸流并对比
+
+从 Day 2 的 MP4 中分别抽出视频和音频裸流：
+
+```bash
+# 抽视频裸流（Annex B 格式，-an 表示去掉音频）
+ffmpeg -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -an -c:v copy \
+  labs/01-ffmpeg-cli/samples/day4_video.h264
+
+# 抽音频裸流（ADTS 格式，-vn 表示去掉视频）
+ffmpeg -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -vn -c:a copy \
+  labs/01-ffmpeg-cli/samples/day4_audio.aac
+```
+
+文件大小对比：
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `day2_testsrc_30s.mp4` | 912.4 KB | 视频 + 音频 + 容器开销 |
+| `day4_video.h264` | 409.2 KB | 仅视频裸流 |
+| `day4_audio.aac` | 479.3 KB | 仅音频裸流 |
+
+关键 `ffprobe` 差异：
+
+- `.h264` 裸流：`Duration: N/A`，`bitrate: N/A`，fps 被猜成 25（实际 30）——裸流没有容器，无时间戳索引。
+- `.aac` 裸流：时长被估算为 31.43s（实际 30s），带警告 "Estimating duration from bitrate"——ADTS 格式无全局索引。
+- MP4：所有字段精确，因为 moov 盒子存储了完整索引和元数据。
+- 409 + 479 ≈ 888 KB，MP4 912 KB，差值 ~24 KB 是容器开销（moov 盒子）。
