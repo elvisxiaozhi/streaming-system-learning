@@ -169,3 +169,190 @@ ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
 - 分辨率降低导致文件变小（像素减少 → bit 需求减少）。
 - 指定 `-b:v 200k`（高于原始 111k）反而使文件变大：原始用 CRF 质量优先，强制更高码率只是浪费 bit，不提升画质。
 - CRF 比固定码率更适合"在合理质量下压到最小文件"的场景。
+
+## Day 6：集中实验——截图、抽帧、截取、合并、提取音频
+
+本节把五类常用 FFmpeg 操作集中演练，素材均基于 `day2_testsrc_30s.mp4`。
+
+### 实验 1：截图（单帧 PNG）
+
+从第 5 秒位置截取 1 张图：
+
+```bash
+ffmpeg -y -ss 5 -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -frames:v 1 \
+  labs/01-ffmpeg-cli/samples/day6_screenshot.png
+```
+
+| 参数 | 含义 |
+|---|---|
+| `-ss 5` | 跳转到第 5 秒（放在 `-i` 前面是输入 seek，速度快） |
+| `-frames:v 1` | 只输出 1 帧 |
+
+输出：`day6_screenshot.png`，约 45 KB，1280×720 PNG。
+
+### 实验 2：抽帧（每秒 1 帧）
+
+把前 5 秒按每秒 1 帧抽成图片序列：
+
+```bash
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -vf "fps=1" -t 5 \
+  labs/01-ffmpeg-cli/samples/day6_frames/frame_%03d.png
+```
+
+| 参数 | 含义 |
+|---|---|
+| `-vf "fps=1"` | 视频滤镜：每秒输出 1 帧 |
+| `-t 5` | 只处理前 5 秒 |
+| `frame_%03d.png` | 输出序列，`%03d` 表示三位数字编号 |
+
+输出：`frame_001.png` ～ `frame_005.png`，每张约 44 KB。
+
+### 实验 3：截取 10 秒片段
+
+从第 5 秒开始，截取 10 秒，不重新编码：
+
+```bash
+ffmpeg -y -ss 5 -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -t 10 -c copy \
+  labs/01-ffmpeg-cli/samples/day6_clip_10s.mp4
+```
+
+| 参数 | 含义 |
+|---|---|
+| `-ss 5` | 从第 5 秒开始 |
+| `-t 10` | 持续 10 秒 |
+| `-c copy` | 流复制，不重新编码，速度极快 |
+
+输出文件大小对比：
+
+| 文件 | 时长 | 大小 |
+|---|---|---|
+| `day2_testsrc_30s.mp4` | 30s | 912 KB |
+| `day6_clip_10s.mp4` | 10s | 459 KB |
+
+注意：`-c copy` 截取时会对齐到最近的关键帧，实际时长可能略长于 10 秒。
+
+### 实验 4：提取音频
+
+把视频里的音频流单独提取为 AAC：
+
+```bash
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -vn -c:a copy \
+  labs/01-ffmpeg-cli/samples/day6_audio_only.aac
+```
+
+| 参数 | 含义 |
+|---|---|
+| `-vn` | 去掉视频流（video none） |
+| `-c:a copy` | 音频流直接复制，不重新编码 |
+
+输出：`day6_audio_only.aac`，480 KB，与 Day 4 的 `day4_audio.aac` 一致。
+
+### 实验 5：合并音视频
+
+先从原视频提取纯视频（去掉音频），再与独立音频合并回一个 MP4：
+
+```bash
+# 步骤一：提取纯视频流
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day2_testsrc_30s.mp4 \
+  -an -c:v copy \
+  labs/01-ffmpeg-cli/samples/day6_video_only.mp4
+
+# 步骤二：合并音视频
+ffmpeg -y \
+  -i labs/01-ffmpeg-cli/samples/day6_video_only.mp4 \
+  -i labs/01-ffmpeg-cli/samples/day6_audio_only.aac \
+  -c copy \
+  labs/01-ffmpeg-cli/samples/day6_merged.mp4
+```
+
+| 参数 | 含义 |
+|---|---|
+| `-an` | 去掉音频流（audio none） |
+| 两个 `-i` | 分别输入视频文件和音频文件 |
+| `-c copy` | 两路流都不重新编码，直接合封装 |
+
+文件大小对比：
+
+| 文件 | 内容 | 大小 |
+|---|---|---|
+| `day6_video_only.mp4` | 仅视频 | 420 KB |
+| `day6_audio_only.aac` | 仅音频 | 480 KB |
+| `day6_merged.mp4` | 合并后 | 912 KB |
+
+合并后大小 ≈ 视频 + 音频，容器开销可忽略不计（`-c copy` 无需额外编码）。
+
+### Day 6 关键 ffprobe 对比
+
+#### 截图（PNG）vs 视频帧
+
+```bash
+ffprobe -v error -show_streams labs/01-ffmpeg-cli/samples/day6_screenshot.png
+```
+
+| 字段 | PNG 截图 | 原始 MP4 视频流 |
+|---|---|---|
+| `codec_name` | `png` | `h264` |
+| `pix_fmt` | `rgb24` | `yuv420p` |
+| `color_space` | `gbr` | 未设置 |
+| `duration` | `N/A` | `30.000000` |
+| `start_time` | `N/A` | `0.000000` |
+
+关键结论：
+- `-frames:v 1` 输出 PNG 时，FFmpeg 自动把 `yuv420p` 转成了 `rgb24`。PNG 是无损 RGB 图像格式，不用 YUV。
+- PNG 是静态图像，没有时间信息，所以 `duration` 和 `start_time` 均为 `N/A`。
+
+#### 截取片段：时长为何是 10.1s 而非 10s
+
+```bash
+ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_clip_10s.mp4
+```
+
+| 文件 | 请求时长 | 实际时长 |
+|---|---|---|
+| `day6_clip_10s.mp4` | `-t 10`（10 秒）| `10.100000` s |
+
+原因：`-c copy` 不重新编码，只能从关键帧（I 帧）处开始切割。第 5 秒处如果不是关键帧，FFmpeg 会自动向前对齐到最近的关键帧，导致实际时长略超 10 秒。
+
+#### 提取音频：ADTS 裸流 vs 封装进 MP4
+
+| 字段 | `day6_audio_only.aac`（ADTS 裸流）| `day6_merged.mp4` 音频流 |
+|---|---|---|
+| 容器格式 | `aac`（raw ADTS）| `mov,mp4,m4a...` |
+| `duration` | `31.413501` s（估算）| `30.037333` s（精确）|
+| `start_time` | `N/A` | `0.000000` |
+| `bit_rate` | `124971` bit/s（估算）| `128072` bit/s（精确）|
+| `extradata_size` | `N/A` | `2` bytes |
+
+关键结论：
+- ADTS 裸流没有全局索引，`duration` 和 `bit_rate` 都是 ffprobe 根据文件大小估算的，和 Day 4 `.aac` 的结论一致。
+- 封装进 MP4 后，`duration` 变精确（由 moov box 记录），`extradata_size=2` 说明容器里存储了 AAC 的 codec config（AudioSpecificConfig），这是 ADTS 所没有的。
+- 音频时长 `30.037333` 略大于 `30.000000`，是 AAC 帧边界对齐造成的正常误差。
+
+#### 合并前后流数量对比
+
+```bash
+ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_video_only.mp4
+ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_merged.mp4
+```
+
+| 文件 | `nb_streams` | 视频流 | 音频流 |
+|---|---|---|---|
+| `day6_video_only.mp4` | 1 | H.264 High | 无 |
+| `day6_merged.mp4` | 2 | H.264 High | AAC LC |
+
+合并后两路流的编解码参数与分离前完全一致（`-c copy` 不改变编码）。
+
+### Day 6 命令速查
+
+| 操作 | 核心参数 |
+|---|---|
+| 截图 | `-ss <秒> -frames:v 1` |
+| 抽帧序列 | `-vf "fps=N" -t <秒>` + `%03d.png` |
+| 截取片段 | `-ss <开始> -t <时长> -c copy` |
+| 提取音频 | `-vn -c:a copy` |
+| 提取视频 | `-an -c:v copy` |
+| 合并音视频 | 两个 `-i` + `-c copy` |
