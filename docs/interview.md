@@ -85,3 +85,21 @@
 
 4. 同一段 AAC 音频，在 ADTS 裸流里 `duration=31.41s`，封装进 MP4 后变成 `30.04s`，原因是什么？
 - ADTS 裸流没有全局索引，ffprobe 只能用文件大小除以估算码率来推算时长，结果不准。封装进 MP4 后，moov 盒子里记录了精确的帧计数和时间戳，时长变精确；同时 MP4 里的 AAC 流还多了 2 字节的 AudioSpecificConfig（extradata），存储采样率和声道数，解码器不再需要从每帧帧头读取。
+
+## Day 8
+
+1. PTS 和 DTS 分别是什么？
+- PTS（Presentation Time Stamp）是显示时间戳，描述这一帧应该什么时刻显示给用户。DTS（Decoding Time Stamp）是解码时间戳，描述这个 packet 应该什么时刻被解码。DTS 必须单调递增，PTS 有 B 帧时会乱序。
+
+2. PTS 和 DTS 什么时候会不一样？为什么？
+- 有 B 帧时会不一样。B 帧在显示顺序上夹在其他帧中间，但解码时必须等它参考的 P 帧先解码完，所以 B 帧的 packet 在文件里排在 P 帧之后（DTS 顺序），但显示时却在 P 帧之前（PTS 顺序）。没有 B 帧时 PTS = DTS。
+
+3. time_base 是什么？看到 `pts=512`、`time_base=1/15360`，实际是多少秒？
+- time_base 是时间戳的计量单位。实际秒数 = pts × time_base = 512 × (1/15360) ≈ 0.033s，正好是 30fps 的一帧时长（1/30 ≈ 0.033s）。
+
+4. 为什么 `ffprobe -show_packets` 里前几个 packet 的 DTS 是负数？
+- 因为有 B 帧，编码器需要提前把 P 帧发出去（让解码器先解码 P 帧），才能让 B 帧正确参考它。为了保证第一帧的 PTS=0（显示时间从 0 开始），编码器把这些提前发送的 packet 的 DTS 设为负数。这是 B 帧引入的编解码延迟，属于正常现象。
+
+5. `flags=K__` 是什么含义？为什么对应的 packet size 最大？
+- `K` 表示关键帧，即 I 帧。I 帧不依赖其他帧，存储了完整的图像数据，所以 size 最大（本次实验第一个 packet 为 8686 字节，其他帧只有 200-300 字节左右）。
+- ADTS 裸流没有全局索引，ffprobe 只能用文件大小除以估算码率来推算时长，结果不准。封装进 MP4 后，moov 盒子里记录了精确的帧计数和时间戳，时长变精确；同时 MP4 里的 AAC 流还多了 2 字节的 AudioSpecificConfig（extradata），存储采样率和声道数，解码器不再需要从每帧帧头读取。

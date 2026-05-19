@@ -58,3 +58,12 @@
 - `rgb24`：PNG 图像的像素格式，每像素用 8 位红、绿、蓝三通道表示；FFmpeg 截图时自动把视频的 `yuv420p` 转成 `rgb24`，因为 PNG 不支持 YUV 存储。
 - AudioSpecificConfig：AAC 解码所需的初始化参数，记录采样率、声道数等，通常只有 2 字节；封装在 MP4 容器的 `extradata` 里，ADTS 裸流则没有它（靠每帧帧头自描述）。
 - 图像序列（image sequence）：FFmpeg 输出多帧图片时用 `%03d.png` 这类格式化文件名，`%03d` 表示三位数字自增编号（001、002…）；`-vf "fps=N"` 控制每秒输出帧数。
+
+## Day 8
+
+- PTS（Presentation Time Stamp，显示时间戳）：描述这一帧应该在什么时刻显示给用户。有 B 帧时，PTS 不是单调递增的，因为 B 帧在显示顺序上夹在其他帧中间。
+- DTS（Decoding Time Stamp，解码时间戳）：描述这个 packet 应该在什么时刻被解码。DTS 必须严格单调递增，因为解码器按 DTS 顺序处理 packet。没有 B 帧时，PTS = DTS。
+- time_base（时间基）：时间戳的计量单位，格式为 `1/N`（例如 `1/15360`）；PTS/DTS 的整数值 × time_base = 实际秒数。time_base 由编码器决定，不同流的 time_base 可能不同。
+- 解码顺序 vs 显示顺序：有 B 帧时，packet 在文件里的排列顺序（DTS 顺序）和帧最终显示的顺序（PTS 顺序）不一致；解码器按 DTS 顺序解码，再按 PTS 顺序排队显示。
+- flags=K__：`ffprobe -show_packets` 输出里的帧标志，`K` 表示关键帧（I 帧），对应的 packet size 最大，因为 I 帧不依赖其他帧，存储了完整图像数据。
+- 编解码延迟（codec delay）：因为 B 帧需要参考后面的帧才能解码，编码器必须提前发送 P 帧；这导致最开始几个 packet 的 DTS 是负数，这是正常现象，不是错误。
