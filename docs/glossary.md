@@ -67,3 +67,11 @@
 - 解码顺序 vs 显示顺序：有 B 帧时，packet 在文件里的排列顺序（DTS 顺序）和帧最终显示的顺序（PTS 顺序）不一致；解码器按 DTS 顺序解码，再按 PTS 顺序排队显示。
 - flags=K__：`ffprobe -show_packets` 输出里的帧标志，`K` 表示关键帧（I 帧），对应的 packet size 最大，因为 I 帧不依赖其他帧，存储了完整图像数据。
 - 编解码延迟（codec delay）：因为 B 帧需要参考后面的帧才能解码，编码器必须提前发送 P 帧；这导致最开始几个 packet 的 DTS 是负数，这是正常现象，不是错误。
+
+## Day 9
+
+- I 帧（Intra frame）：完整编码的帧，不参考任何其他帧，解码时可独立解出完整图像；是 seek 和随机访问的入口，文件占用最大（本次实验约 8686-9200 字节）。
+- P 帧（Predicted frame）：只存储与前一个参考帧的差异，依赖前面的 I 帧或 P 帧；比 I 帧小很多（约 828-968 字节）。
+- B 帧（Bi-directional frame）：同时参考前后两个参考帧，冗余信息最少，压缩率最高（约 200-343 字节，约为 I 帧的 1/30）；代价是解码时必须等后面的参考帧先到，引入编解码延迟。
+- GOP（Group of Pictures）：从一个 I 帧到下一个 I 帧之间的帧序列；本次实验 libx264 默认 GOP = 250 帧（约 8.3 秒）。GOP 越小，seek 越快、直播延迟越低，但 I 帧占比高，文件略大。
+- `-show_frames`：ffprobe 参数，输出解码后的帧信息，按**显示顺序**（PTS 单调递增）排列，包含 `pict_type`（I/P/B）、`key_frame`、`pts_time`；与 `-show_packets`（解码顺序，含 DTS）互补。
