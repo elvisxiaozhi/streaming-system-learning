@@ -356,3 +356,28 @@ ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_merged.mp4
 | 提取音频 | `-vn -c:a copy` |
 | 提取视频 | `-an -c:v copy` |
 | 合并音视频 | 两个 `-i` + `-c copy` |
+
+## samples/ 目录归档清单
+
+`samples/` 下的所有实验产物都不入 Git，丢失后需要按下表重新生成。两个**源文件**必须长期保留（其他 day 的实验都从它们派生），其余可按需重跑。
+
+### 源文件（必留，丢失需重新生成）
+
+| 文件 | 用途 | 生成命令 |
+|---|---|---|
+| `day2_testsrc_30s.mp4` | 合成源（720p / 30fps / 30s，testsrc 几何图案 + 1kHz 正弦）；Day 2-10 多个实验的输入 | 见上方 Day 2 一节 |
+| `day11_noisy_src.mp4` | 带噪点源（720p / 30fps / 10s，testsrc + noise filter，无音频）；Day 11 / Day 12 画质对比实验的输入 | `ffmpeg -y -f lavfi -i "testsrc=duration=10:size=1280x720:rate=30,noise=alls=20:allf=t" -c:v libx264 -pix_fmt yuv420p -crf 23 labs/01-ffmpeg-cli/samples/day11_noisy_src.mp4` |
+
+### 派生产物（可丢可重生）
+
+| 文件 | 所属 Day | 实验主题 |
+|---|---|---|
+| `day6_*.{png,mp4,aac}`、`day6_frames/` | Day 6 | 截图 / 抽帧 / 截取 / 提取 / 合并 |
+| `day10_{15,30,60}fps.mp4` | Day 10 | 帧率转换 |
+| `day12_noisy_{cbr_500k,cbr_1500k,vbr_500k,crf_capped}.mp4` | Day 12 | 带噪点源的 CBR / VBR / CRF+maxrate 对比 |
+| `day12_synth_{cbr_500k,vbr_500k,crf_capped}.mp4` | Day 12 | 合成源的 CBR / VBR / CRF+maxrate 对比 |
+
+### 经验规则
+
+- **lavfi 生成或带 filter 的源必须显式 `-pix_fmt yuv420p`**：否则 libx264 可能选 yuv444p / High 4:4:4 Predictive，QuickTime / Finder 预览 / 浏览器 / Windows 自带播放器普遍不支持，看起来像"文件没坏但没画面"。
+- **新增源文件时同步更新本表**，并记录"哪些 day 的实验依赖它"，避免源消失后下游实验找不到上游。

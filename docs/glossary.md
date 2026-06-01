@@ -89,3 +89,13 @@
 - 内容复杂度（content complexity）：编码器决定码率分配的核心因素。在 CRF 模式下，合成图案（纯色、几何形）信息量少，低质量档（CRF 28）仍能精确重建，文件小；真实内容（噪点、纹理、运动）信息量大，低质量档会丢弃大量细节，出现块状感，且需要更多 bit 才能维持相同质量。
 - 码率翻倍规律：libx264 的 CRF 经验规律——CRF 每降低 6，码率约翻倍；每升高 6，码率约减半。合成源因为内容过于简单，体现不明显；复杂内容（带噪点源 CRF 18 vs 28，跨 10 格）码率相差 5.6 倍，接近理论值。
 - 合成测试源（synthetic test source）：FFmpeg `testsrc` 生成的几何图案，适合验证工具行为（帧率、容器、时间戳），不适合做画质感知实验。画质对比实验需要真实拍摄素材或带噪点/复杂纹理的测试源（如 `noise=alls=20`）。
+
+## Day 12
+
+- CBR（Constant Bit Rate，恒定码率）：码率严格固定的编码模式，编码器必须满足"每秒输出 = 目标码率"，简单内容会主动填到目标值（更精细量化 + padding NAL），复杂内容则通过加大 QP 牺牲画质。FFmpeg 写法：`-b:v X -minrate X -maxrate X -bufsize 2X -x264-params "nal-hrd=cbr"`。适合带宽严格固定的直播推流、硬件传输。
+- VBR（Variable Bit Rate，可变码率）：码率有目标和上限，编码器按内容复杂度在区间内灵活分配 bit。FFmpeg 写法：`-b:v 平均 -maxrate 峰值 -bufsize 2×maxrate`。同样平均码率下整体画质优于 CBR，因为复杂帧可以多分 bit。
+- `-maxrate`：FFmpeg 中限制瞬时峰值码率的参数。与 `-b:v` 搭配触发 VBR；与 CRF 搭配时作为软上限（CRF 想要的码率没超过 maxrate 就走 CRF，超过则退化为有上限的 VBR）。
+- `-bufsize`：HRD 虚拟缓冲区大小。决定编码器在多长一段时间内可以偏离平均码率：bufsize 越大，瞬时码率波动越自由；bufsize ≈ maxrate 时行为接近 CBR；bufsize ≈ 2×maxrate 时是直播推流的典型配置（约 2 秒缓冲）。
+- HRD（Hypothetical Reference Decoder，假想参考解码器）：H.264 标准里规定的虚拟解码器缓冲模型，约束编码器输出的码率波动必须能被某个固定大小的缓冲区吸收，防止真实解码端缓冲溢出或欠载。`maxrate` 和 `bufsize` 是 HRD 的两个参数。
+- CRF + maxrate（直播常用混合策略）：CRF 给质量目标，maxrate 兜带宽上限。大部分时段按 CRF 走，画质稳定；遇到突发复杂帧时 maxrate 退化为软上限保护上行带宽。比纯 CBR 高效（简单段落不浪费 bit），比纯 CRF 安全（不会把上行打爆）。
+- yuv420p 强制约定：lavfi 生成的源（如 `testsrc`、`noise` filter）或带 filter 的转码命令，必须显式加 `-pix_fmt yuv420p`，否则可能默认输出 yuv444p / 4:4:4 Predictive profile，QuickTime / Finder 预览 / 浏览器 / Windows 自带播放器普遍不支持，看起来像"文件没坏但没画面"。
