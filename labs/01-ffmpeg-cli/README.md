@@ -357,6 +357,52 @@ ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_merged.mp4
 | 提取视频 | `-an -c:v copy` |
 | 合并音视频 | 两个 `-i` + `-c copy` |
 
+## Day 15：PCM、采样率、位深和声道
+
+生成 10 秒、48000 Hz、16-bit、单声道 PCM WAV 基准样本：
+
+```bash
+ffmpeg -y \
+  -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=10" \
+  -c:a pcm_s16le -ac 1 \
+  labs/01-ffmpeg-cli/samples/day15_48k_s16_mono.wav
+```
+
+修改 `sample_rate`、PCM 编码器和 `-ac`，生成四组对照样本：
+
+| 文件 | 采样率 | 位深 | 声道 | 流码率 | 理论 PCM 大小 | 实际 WAV 大小 |
+|---|---:|---:|---:|---:|---:|---:|
+| `day15_48k_s16_mono.wav` | 48000 Hz | 16-bit | 1 | 768000 bit/s | 960000 bytes | 960078 bytes |
+| `day15_48k_s16_stereo.wav` | 48000 Hz | 16-bit | 2 | 1536000 bit/s | 1920000 bytes | 1920078 bytes |
+| `day15_44k1_s16_mono.wav` | 44100 Hz | 16-bit | 1 | 705600 bit/s | 882000 bytes | 882078 bytes |
+| `day15_48k_s24_mono.wav` | 48000 Hz | 24-bit | 1 | 1152000 bit/s | 1440000 bytes | 1440102 bytes |
+
+探测命令：
+
+```bash
+ffprobe -v error \
+  -show_entries stream=codec_name,sample_fmt,sample_rate,channels,channel_layout,bits_per_sample,bits_per_raw_sample,bit_rate,duration \
+  -show_entries format=format_name,duration,size,bit_rate \
+  -of default=noprint_wrappers=1 \
+  labs/01-ffmpeg-cli/samples/day15_48k_s16_mono.wav
+```
+
+PCM 码率与数据大小可以直接计算：
+
+```text
+码率（bit/s）= 采样率 × 位深 × 声道数
+数据大小（bytes）= 采样率 × 位深 × 声道数 × 时长 ÷ 8
+```
+
+关键结论：
+
+- 采样率是每秒产生的采样时刻数，不是声音自身的振动频率。
+- 位深是每个样本的有效位数，决定振幅量化精度；采样率控制时间轴密度，位深控制振幅轴精度。
+- 双声道每个采样时刻保存左、右两个样本；若只是复制单声道，数据量翻倍但没有增加新内容。
+- WAV 比纯 PCM 数据稍大，因为带有格式头和元数据。
+- `pcm_s24le` 在文件中通常每样本紧凑占 3 bytes；FFmpeg 解码后可能以 `sample_fmt=s32` 用 4-byte 内存容器承载 24-bit 有效数据。
+- 裸 PCM 没有格式头，播放时必须从外部指定采样格式、采样率和声道数。
+
 ## samples/ 目录归档清单
 
 `samples/` 下的所有实验产物都不入 Git，丢失后需要按下表重新生成。两个**源文件**必须长期保留（其他 day 的实验都从它们派生），其余可按需重跑。
@@ -376,6 +422,7 @@ ffprobe -v error -show_format labs/01-ffmpeg-cli/samples/day6_merged.mp4
 | `day10_{15,30,60}fps.mp4` | Day 10 | 帧率转换 |
 | `day12_noisy_{cbr_500k,cbr_1500k,vbr_500k,crf_capped}.mp4` | Day 12 | 带噪点源的 CBR / VBR / CRF+maxrate 对比 |
 | `day12_synth_{cbr_500k,vbr_500k,crf_capped}.mp4` | Day 12 | 合成源的 CBR / VBR / CRF+maxrate 对比 |
+| `day15_*.wav` | Day 15 | 采样率 / 位深 / 声道数与 PCM 数据大小对比 |
 
 ### 经验规则
 
