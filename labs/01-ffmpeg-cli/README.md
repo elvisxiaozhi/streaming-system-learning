@@ -403,6 +403,53 @@ PCM 码率与数据大小可以直接计算：
 - `pcm_s24le` 在文件中通常每样本紧凑占 3 bytes；FFmpeg 解码后可能以 `sample_fmt=s32` 用 4-byte 内存容器承载 24-bit 有效数据。
 - 裸 PCM 没有格式头，播放时必须从外部指定采样格式、采样率和声道数。
 
+## Day 16：WAV / 裸 PCM / AAC / Opus 对比
+
+基准输入为 10 秒、48000 Hz、16-bit、单声道 PCM WAV。生成裸 PCM、AAC/M4A 和 Opus/Ogg：
+
+```bash
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day16_source.wav \
+  -c:a pcm_s16le -f s16le \
+  labs/01-ffmpeg-cli/samples/day16_raw.pcm
+
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day16_source.wav \
+  -c:a aac -b:a 128k \
+  labs/01-ffmpeg-cli/samples/day16_aac.m4a
+
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day16_source.wav \
+  -c:a libopus -b:a 64k \
+  labs/01-ffmpeg-cli/samples/day16_opus.ogg
+
+ffmpeg -y -i labs/01-ffmpeg-cli/samples/day16_source.wav \
+  -c:a libopus -b:a 64k -vbr off \
+  labs/01-ffmpeg-cli/samples/day16_opus_cbr.ogg
+```
+
+| 文件 | 实际大小 | 总平均码率 | 说明 |
+|---|---:|---:|---|
+| `day16_source.wav` | 960078 bytes | 768062 bit/s | 960000 bytes PCM + 78 bytes WAV 开销 |
+| `day16_raw.pcm` | 960000 bytes | 768000 bit/s | 没有格式头，无法自描述 |
+| `day16_aac.m4a` | 162211 bytes | 129768 bit/s | AAC 流约 127347 bit/s，接近 128k 目标 |
+| `day16_opus.ogg` | 120193 bytes | 96091 bit/s | `libopus` 默认 VBR，64k 不是严格上限 |
+| `day16_opus_cbr.ogg` | 81095 bytes | 64833 bit/s | `-vbr off` 后紧贴 64k |
+
+FFmpeg 8.1.1 下探测裸 PCM 需明确指定 demuxer 参数：
+
+```bash
+ffprobe -v error -f s16le \
+  -sample_rate 48000 -ch_layout mono \
+  -show_streams -show_format \
+  labs/01-ffmpeg-cli/samples/day16_raw.pcm
+```
+
+关键结论：
+
+- WAV 是容器，裸 PCM 只是样本；同一串裸字节可被不同采样率、位深和声道数解释。
+- AAC/Opus 压缩后仍可以是 48 kHz；采样率和编码码率是两个维度。
+- `sample_fmt=fltp` 是解码器输出格式，不表示压缩文件内保存浮点 PCM。
+- VBR 目标码率不是严格上限；本次 Opus 64k VBR 实际达到约 96 kbps。
+- AAC/Opus 是有损编码；解码回 PCM 后与原始文件的 SHA-256 不同。
+
 ## samples/ 目录归档清单
 
 `samples/` 下的所有实验产物都不入 Git，丢失后需要按下表重新生成。两个**源文件**必须长期保留（其他 day 的实验都从它们派生），其余可按需重跑。
@@ -423,6 +470,7 @@ PCM 码率与数据大小可以直接计算：
 | `day12_noisy_{cbr_500k,cbr_1500k,vbr_500k,crf_capped}.mp4` | Day 12 | 带噪点源的 CBR / VBR / CRF+maxrate 对比 |
 | `day12_synth_{cbr_500k,vbr_500k,crf_capped}.mp4` | Day 12 | 合成源的 CBR / VBR / CRF+maxrate 对比 |
 | `day15_*.wav` | Day 15 | 采样率 / 位深 / 声道数与 PCM 数据大小对比 |
+| `day16_*` | Day 16 | WAV / 裸 PCM / AAC / Opus、Opus VBR/CBR 及有损解码对比 |
 
 ### 经验规则
 
